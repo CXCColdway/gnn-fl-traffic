@@ -99,25 +99,27 @@ class MetrFedEngine:
         '''
 
         t1 = time.time()
-        mean_loss = 0
+        mean_loss = []
         c_state = None
         MAE, MAPE, RMSE = 0, 0, 0
 
         if self.mode == "Train":
             for epoh in range(self.args.client_epochs):
-                stats = self.batch_run(True)
+                stats = self.batch_run_train(True)
                 loss, MAE, MAPE, RMSE = stats
-                mean_loss = np.mean(loss)
+                mean_loss.append(loss)
 
         elif self.mode == "Test":
-            stats = self.batch_run(False)
+            stats = self.batch_run_test(False)
             loss, MAE, MAPE, RMSE = stats
-            mean_loss = np.mean(loss)
+            mean_loss.append(loss)
+            # print('test loss:', mean_loss)
 
         time_cost = time.time() - t1
+        # print('test time:', time_cost)
         log = self.mode + ' - Thread: {:03d}, Client: {:03d}. Average Loss: {:.4f},' \
                           ' MAE: {:.6f}, MAPE :{:.6f}, RMSE: {:.6f}, Total Time Cost: {:.4f}'
-        self.logger(log.format(self.thread, self.client_id, mean_loss, MAE, MAPE, RMSE,
+        self.logger(log.format(self.thread, self.client_id, np.mean(mean_loss), MAE, MAPE, RMSE,
                                time_cost), True)
 
         self.model.to("cuda")
@@ -132,7 +134,7 @@ class MetrFedEngine:
 
         return output
 
-    def batch_run(self, training):
+    def batch_run_train(self, training):  # 测试训练函数分离
         loss_list = []
         scaler = StandardScaler()
         self.model.train(training)
@@ -140,38 +142,46 @@ class MetrFedEngine:
         optimizer = torch.optim.RMSprop(self.model.parameters(), lr=0.001)
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.7)
         train_iter, test_iter, val_iter, G, n_route, adj_mx = load_data(args=self.args)
-        print(len(list(train_iter)), len(list(test_iter)), len(list(val_iter)))
-        min_val_loss = np.inf
         for epoch in range(1, self.args.gnn_epochs + 1):
             l_sum, n = 0.0, 0
             self.model.train()
-            for x, y in train_iter:
+            for x, y in train_iter: # 测试数据集
                 y_pred = self.model(x, self.args).view(len(x), -1)
                 l = loss(y_pred, y)
                 optimizer.zero_grad()  # 将此前的所有梯度清零，避免对后续训练产生影响
                 l.backward()
-                optimizer.step()  # 更新梯度参数
+                optimizer.step()  # 更新梯度参数,test不用做
                 l_sum += l.item() * y.shape[0]
                 n += y.shape[0]
             scheduler.step()  # 更新学习率
             train_loss = l_sum / n
-            val_loss = evaluate_model(self.model, loss, val_iter, self.args)  # 获取评估的loss，调用utils.py文件
-            if val_loss < min_val_loss:
-                min_val_loss = val_loss
-                torch.save(self.model.state_dict(), self.args.savemodelpath)
-            '''
-            print(
-                "epoch",
-                epoch,
-                ", train loss:",
-                train_loss,
-                ", validation loss:",
-                val_loss,
-            )
-            '''
             loss_list.append(train_loss)
         MAE, MAPE, RMSE = evaluate_metric(self.model, train_iter, scaler, self.args)
-        # print('MAE:', MAE, 'MAPE', MAPE, 'RMSE', RMSE)
+        return loss_list, MAE, MAPE, RMSE
+
+    def batch_run_test(self, training):  # 测试训练函数分离
+        loss_list = []
+        scaler = StandardScaler()
+        self.model.train(training)
+        loss = nn.MSELoss()
+        optimizer = torch.optim.RMSprop(self.model.parameters(), lr=0.001)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.7)
+        train_iter, test_iter, val_iter, G, n_route, adj_mx = load_data(args=self.args)
+        for epoch in range(1, self.args.clients + 1):
+            l_sum, n = 0.0, 0
+            self.model.train()
+            for x, y in test_iter: # 测试数据集
+                y_pred = self.model(x, self.args).view(len(x), -1)
+                l = loss(y_pred, y)
+                optimizer.zero_grad()  # 将此前的所有梯度清零，避免对后续训练产生影响
+                l.backward()
+                optimizer.step()  # 更新梯度参数,test不用做
+                l_sum += l.item() * y.shape[0]
+                n += y.shape[0]
+            scheduler.step()  # 更新学习率
+            test_loss = l_sum / n
+            loss_list.append(test_loss)
+        MAE, MAPE, RMSE = evaluate_metric(self.model, test_iter, scaler, self.args)
         return loss_list, MAE, MAPE, RMSE
 
     def criterion(self, loss, mode):
@@ -205,4 +215,3 @@ class MetrFedEngine:
             print(buf)
         with open(self.args.logDir, 'a+') as f:
             f.write(str(datetime.datetime.now()) + '\t' + buf + '\n')
-
