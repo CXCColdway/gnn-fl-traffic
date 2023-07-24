@@ -51,13 +51,10 @@ def load_data(args):
     # 生成训练集、验证集和测试集。使用迭代器输出小批量数据
     train_data = torch.utils.data.TensorDataset(x_train, y_train)
     train_iter = torch.utils.data.DataLoader(train_data, batch_size, shuffle=True)  # len=2385
-    train_iter = islice(train_iter, 300)
     val_data = torch.utils.data.TensorDataset(x_val, y_val)
     val_iter = torch.utils.data.DataLoader(val_data, batch_size)
-    val_iter = islice(val_iter, 200)
     test_data = torch.utils.data.TensorDataset(x_test, y_test)
     test_iter = torch.utils.data.DataLoader(test_data, batch_size)  # len=671
-    test_iter = islice(test_iter, 100)
 
     return train_iter, test_iter, val_iter, G, n_route, adj_mx
 
