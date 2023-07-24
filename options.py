@@ -13,7 +13,7 @@ def arg_parameter():
     parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--debug', type=int, default=0, help='debug mode')
     parser.add_argument('--reg', type=int, default=1, help='enable regulizer or not for local train')
-    parser.add_argument('--com_round', type=int, default=1, help='Number of communication round to train.')
+    parser.add_argument('--com_round', type=int, default=3, help='Number of communication round to train.')
     parser.add_argument('--epoch', type=int, default=1, help='epoch for each communication round.')
     parser.add_argument('--client_epochs', type=int, default=1, help='epoch for each communication round.')
     parser.add_argument('--logDir', default='./log/,default.txt', help='Path for log info')
