@@ -21,8 +21,6 @@ def main(args):
     '''
     print("Prepare data and model")
     train_iter, test_iter, val_iter, G, n_route, adj_mx = load_data(args)
-    train, test, val = list(train_iter), list(test_iter), list(val_iter)
-    print(len(train), len(test), len(val))
 
     G = G.to(args.device)
     model = STGCN_WAVE(
@@ -35,8 +33,6 @@ def main(args):
     w_local = [w_local] * args.clients
     global_model = copy.deepcopy(w_server)
     personalized_model = copy.deepcopy(w_local)
-    # print(len(global_model))
-    # print(len(personalized_model))
 
     server_state = None
     clients_states = [None] * args.clients
@@ -46,7 +42,7 @@ def main(args):
     print2file('Number of model parameters is ' + str(nParams), args.logDir, True)
 
     print("Start Training...")
-    num_collaborator = max(int(args.client_frac * args.clients), 1)
+    num_collaborator = max(int(args.client_frac * args.clients), 1) # 后续添加客户端选择过程
     for com in range(1, args.com_round + 1):
         selected_user = np.random.choice(range(args.clients), num_collaborator, replace=False)
         train_time = []
@@ -92,24 +88,29 @@ def main(args):
             all_vloss = []
             all_vMAE, all_vMAPE, all_vRMSE = 0, 0, 0
 
-            for c in range(args.clients):
+            # users = np.random.choice(range(args.clients), 1, replace=False)
+            for user in range(args.clients):
                 batch_time = []
                 batch_loss = []
                 batch_MAE, batch_MAPE, batch_RMSE = 0, 0, 0
 
-                for iter in test_iter:
-                    tengine = MetrFedEngine(args, copy.deepcopy(iter), personalized_model[c], personalized_model[c],
-                                            w_local[c], {}, c, 0, "Test", server_state, clients_states[c])
-                    outputs = tengine.run()
+                # for iter in test_iter:
+                tengine = MetrFedEngine(args, test_iter, personalized_model[user], personalized_model[user],
+                                        w_local[user], {}, user, 0, "Test", server_state, clients_states[user])
+                output = tengine.run()
+                # print(output)
 
-                    batch_time.append(outputs["time"])
-                    batch_loss.append(outputs["loss"])
-                    batch_MAE = outputs["MAE"]
-                    batch_MAPE = outputs["MAPE"]
-                    batch_RMSE = outputs["RMSE"]
+                batch_time.append(output["time"])
+                batch_loss.append(output["loss"])
+                batch_MAE = output["MAE"]
+                batch_MAPE = output["MAPE"]
+                batch_RMSE = output["RMSE"]
 
-                single_vtime.append(batch_time[c])
-                single_vloss.append(batch_loss[c])
+                # print(batch_time, len(batch_time))
+                # print(batch_loss, len(batch_loss))
+
+                single_vtime.append(batch_time[0])
+                single_vloss.append(batch_loss[0])
 
                 all_vtime.append(np.mean(batch_time))
                 all_vloss.append(np.mean(batch_loss))
